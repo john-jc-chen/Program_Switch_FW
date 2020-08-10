@@ -1,0 +1,23 @@
+
+#Please Enter CMM IP, User name and password
+CMM IP:192.168.100.7
+CMM User Name:ADMIN
+CMM Password:ADMIN
+TFTP IP:
+Firmware File Name:
+
+#Leave blank if there is no device at the location
+#Leave blank if you don't want to update FRU at that location
+
+A1 User Name:
+A1 Password:
+
+A1 User Name:
+A1 Password:
+
+A1 User Name:
+A1 Password:
+
+A1 User Name:
+A1 Password:
+
