@@ -43,6 +43,37 @@ def read_config_file(config_file):
         #logging.error("config file is not available.")
         sys.exit()
     return data
+
+def telnet_to_switch(ip, name, password,tftp, file):
+    tn = Telnet(ip)
+    tn.read_until(b"login:")
+    tn.write(name.encode("utf-8") + b"\r\n")
+    tn.read_until(b"Password:")
+    tn.write(password.encode("utf-8") + b"\r\n")
+    tn.read_until(b"SMIS#")
+    cmd = 'firmware upgrade tftp://' + tftp + '/' + file + ' normal'
+    tn.write(cmd.encode("utf-8") + b"\r\n")
+    lines = tn.read_until(b"SMIS#", 2).decode("utf-8", errors='ignore').split("\n")
+    for i in range(len(lines)):
+        if 'Hardware Version' in lines[i]:
+            model = lines[i + 1].split()[1]
+            break
+    tn.write("show system info".encode("utf-8") + b"\r\n")
+    lines = tn.read_until(b"SMIS#", 1).decode("utf-8", errors='ignore').split("\n")
+    board_number = ''
+    for line in lines:
+        result = re.search(r'^Switch\s+Serial\s+Number\s+\:(.*?)$', line)
+        if result:
+            board_number = result.group(1).rstrip().lstrip()
+            break
+        result = re.search(r'^Serial\s+Number\s+\:(.*?)$', line)
+        if result:
+            board_number = result.group(1).rstrip().lstrip()
+            break
+    tn.write("ex".encode("utf-8") + b"\r\n")
+    tn.close()
+    return (model, board_number)
+
 def run_in_each_slot(config_file, slot):
     data = read_config_file(config_file)
 
@@ -52,14 +83,34 @@ def run_in_each_slot(config_file, slot):
         CMM_name = data["CMM User Name"]
     if "CMM Password" in data.keys():
         CMM_passwd = data["CMM Password"]
+    if "TFTP IP" in data.keys():
+        tftp = data["TFTP IP"]
+    if "Firmware File Name":
+        file_name = data["Firmware File Name"]
 
     while check_connectivity(CMM_IP):
-        com = ['ipmitool.exe', '-I', 'lanplus', '-H', ip, '-U', username, '-P', passwd]
-        data = read_config_file(config_file)
+        com = ['ipmitool.exe', '-I', 'lanplus', '-H', ip, '-U', CMM_name, '-P', CMM_passwd]
 
-        str = slot.upper()
+        try:
+            output = subprocess.run(com + ['raw', '0x30', '0x33', '0x0b', '0x' + slot], stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
+        except Exception as e:
+            print("ERROR!! Error has occurred in read data from CMM. Skip programming {}}.\n".format(slot))
+            logging.error("ERROR!! Error has occurred in reading {} IP. ".format(slot) + str(e))
 
+        if output.returncode == 0:
+            ip_text_ary = output.stdout.decode("utf-8", errors='ignore').split()[1:]
+            for i in ip_text_ary:
+                ip = str(int(i, 16)) + '.'
+            ip = ip.rstrip(".")
 
+            if check_connectivity(ip):
+                data = read_config_file(config_file)
+                if slot.upper() + " User Name" in data.keys():
+                    name = data[slot.upper() + " User Name"]
+                    if slot.upper() + " Password" in data.keys():
+                        password = data[slot.upper() + " Password"]
+                        telnet_to_switch(ip, name, password, tftp, file_name)
 
 
 if len(sys.argv) < 2:
