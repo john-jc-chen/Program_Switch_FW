@@ -45,34 +45,47 @@ def read_config_file(config_file):
     return data
 
 def telnet_to_switch(ip, name, password,tftp, file):
-    tn = Telnet(ip)
+
+    tn = telnetlib.Telnet(ip)
     tn.read_until(b"login:")
-    tn.write(name.encode("utf-8") + b"\r\n")
+    tn.write(name.encode('utf-8') + b"\r\n")
     tn.read_until(b"Password:")
-    tn.write(password.encode("utf-8") + b"\r\n")
+    tn.write(password.encode('utf-8') + b"\r\n")
     tn.read_until(b"SMIS#")
-    cmd = 'firmware upgrade tftp://' + tftp + '/' + file + ' normal'
-    tn.write(cmd.encode("utf-8") + b"\r\n")
-    lines = tn.read_until(b"SMIS#", 2).decode("utf-8", errors='ignore').split("\n")
-    for i in range(len(lines)):
-        if 'Hardware Version' in lines[i]:
-            model = lines[i + 1].split()[1]
+    command = 'firmware upgrade tftp://' + tftp + '/' + file + ' normal'
+    tn.write(command.encode('utf-8') + b"\r\n")
+    msg = tn.read_until(b"#", timeout=3.0)
+    msg = msg.decode('utf-8', errors='ignore')
+    while "#" not in msg:
+        #print(msg)
+        msg = tn.read_until(b"#", timeout=3.0)
+        msg = msg.decode('utf-8', errors='ignore')
+        if '[y/n]' in msg:
+            tn.write('y'.encode('utf-8'))
+    #print(msg)
+    command = 'firmware upgrade tftp://' + tftp + '/' + file + ' fallback'
+    tn.write(command.encode('utf-8') + b"\r\n")
+    msg = tn.read_until(b"#", timeout=3.0)
+    msg = msg.decode('utf-8', errors='ignore')
+    while "#" not in msg:
+        #print(msg)
+        msg = tn.read_until(b"#", timeout=3.0)
+        msg = msg.decode('utf-8', errors='ignore')
+        if '[y/n]' in msg:
+            tn.write('y'.encode('utf-8'))
+    #print(msg)
+
+    print(tn.read_until(b"#", timeout=3.0))
+    tn.write('reload'.encode('utf-8') + b"\r\n")
+
+    msg = tn.read_until(b"#", timeout=3.0).decode('utf-8', errors='ignore')
+    while "#" not in msg:
+        print(msg)
+        if '[y/n]' in msg:
+            tn.write('y'.encode('utf-8'))
             break
-    tn.write("show system info".encode("utf-8") + b"\r\n")
-    lines = tn.read_until(b"SMIS#", 1).decode("utf-8", errors='ignore').split("\n")
-    board_number = ''
-    for line in lines:
-        result = re.search(r'^Switch\s+Serial\s+Number\s+\:(.*?)$', line)
-        if result:
-            board_number = result.group(1).rstrip().lstrip()
-            break
-        result = re.search(r'^Serial\s+Number\s+\:(.*?)$', line)
-        if result:
-            board_number = result.group(1).rstrip().lstrip()
-            break
-    tn.write("ex".encode("utf-8") + b"\r\n")
-    tn.close()
-    return (model, board_number)
+        msg = tn.read_until(b"SMIS#", timeout=3.0).decode('utf-8', errors='ignore')
+    print('Reboot')
 
 def run_in_each_slot(config_file, slot):
     data = read_config_file(config_file)
@@ -111,6 +124,10 @@ def run_in_each_slot(config_file, slot):
                     if slot.upper() + " Password" in data.keys():
                         password = data[slot.upper() + " Password"]
                         telnet_to_switch(ip, name, password, tftp, file_name)
+                    else:
+                        print(slot.upper() + ' Password is missing. Skip programming this slot.')
+            else:
+                print('Can NOT connect to switch in ' + slot.upper() + ' . Skip programming this slot.')
 
 
 if len(sys.argv) < 2:
