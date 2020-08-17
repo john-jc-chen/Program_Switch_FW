@@ -1,23 +1,19 @@
 
 #Please Enter CMM IP, User name and password
-CMM IP:192.168.100.7
+CMM IP:192.168.100.98
 CMM User Name:ADMIN
 CMM Password:ADMIN
-TFTP IP:
-Firmware File Name:
+TFTP IP::192.168.100.1
+Firmware File Name:MBB-GEM-004-fw-1.0.0.21.img
 
 #Leave blank if there is no device at the location
 #Leave blank if you don't want to update FRU at that location
 
-A1 User Name:
-A1 Password:
+A1 Password:QEIRHUWTCQ
 
-A2 User Name:
 A2 Password:
 
-B1 User Name:
 B1 Password:
 
-B2 User Name:
 B2 Password:
 
