@@ -156,17 +156,15 @@ def run_in_each_slot(config_file, slot):
 
             if check_connectivity(ip):
                 data = read_config_file(config_file)
-                if slot.upper() + " User Name" in data.keys():
-                    name = data[slot.upper() + " User Name"]
-                    if slot.upper() + " Password" in data.keys():
-                        password = data[slot.upper() + " Password"]
-                        if telnet_to_switch(ip, name, password, tftp, file_name):
-                            print('Finished in {}'.format(slot))
-                            update_config(slot)
-                        else:
-                            print('ERROR!! Failed in {}'.format(slot))
+                # if slot.upper() + " User Name" in data.keys():
+                #     name = data[slot.upper() + " User Name"]
+                if slot.upper() + " Password" in data.keys():
+                    password = data[slot.upper() + " Password"]
+                    if telnet_to_switch(ip, 'ADMIN', password, tftp, file_name):
+                        print('Finished in {}'.format(slot))
+                        update_config(slot)
                     else:
-                        print(slot.upper() + ' Password is missing. Skip programming this slot.')
+                        print('ERROR!! Failed in {}'.format(slot))
             else:
                 print('Can NOT connect to switch in ' + slot.upper() + ' . Skip programming this slot.')
 
