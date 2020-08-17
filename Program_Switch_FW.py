@@ -7,6 +7,26 @@ from telnetlib import Telnet
 
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.INFO , filename='Running.log')
 
+
+global_lock = threading.Lock()
+
+def update_config(slot):
+    while global_lock.locked():
+        continue
+
+    global_lock.acquire()
+    data = {}
+    with open("thread_writes", "r") as file:
+        for line in file:
+            result = re.match(r'^' + slot + '\s+(\w+.*?)\:(.*?)$', line)
+            if result:
+                line = slot + result.group(1) + "\n"
+            data.append(line)
+
+    with open("thread_writes", "w") as file:
+        file.write(data)
+    global_lock.release()
+
 def check_connectivity(ip):
 
     logging.info("ping to  {}.".format(ip))
@@ -51,41 +71,58 @@ def telnet_to_switch(ip, name, password,tftp, file):
     tn.write(name.encode('utf-8') + b"\r\n")
     tn.read_until(b"Password:")
     tn.write(password.encode('utf-8') + b"\r\n")
-    tn.read_until(b"SMIS#")
+    tn.read_until(b"#")
     command = 'firmware upgrade tftp://' + tftp + '/' + file + ' normal'
     tn.write(command.encode('utf-8') + b"\r\n")
-    msg = tn.read_until(b"#", timeout=3.0)
-    msg = msg.decode('utf-8', errors='ignore')
+    msg = tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore')
+    Fail = True
     while "#" not in msg:
-        #print(msg)
-        msg = tn.read_until(b"#", timeout=3.0)
-        msg = msg.decode('utf-8', errors='ignore')
+        msg = tn.read_until(b"#", timeout=5.0).decode('utf-8', errors='ignore')
+        if 'successfully' in msg:
+            Fail = False
         if '[y/n]' in msg:
             tn.write('y'.encode('utf-8'))
+
+    if Fail:
+        return False
+
     #print(msg)
     command = 'firmware upgrade tftp://' + tftp + '/' + file + ' fallback'
     tn.write(command.encode('utf-8') + b"\r\n")
-    msg = tn.read_until(b"#", timeout=3.0)
-    msg = msg.decode('utf-8', errors='ignore')
+    msg = tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore')
+    Fail = True
     while "#" not in msg:
         #print(msg)
-        msg = tn.read_until(b"#", timeout=3.0)
-        msg = msg.decode('utf-8', errors='ignore')
+        msg = tn.read_until(b"#", timeout=5.0).decode('utf-8', errors='ignore')
+        if 'successfully' in msg:
+            Fail = False
         if '[y/n]' in msg:
             tn.write('y'.encode('utf-8'))
-    #print(msg)
 
-    print(tn.read_until(b"#", timeout=3.0))
+    if Fail:
+        return False
+
     tn.write('reload'.encode('utf-8') + b"\r\n")
-
-    msg = tn.read_until(b"#", timeout=3.0).decode('utf-8', errors='ignore')
+    msg = tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore')
     while "#" not in msg:
-        print(msg)
+        #print(msg)
         if '[y/n]' in msg:
             tn.write('y'.encode('utf-8'))
             break
-        msg = tn.read_until(b"SMIS#", timeout=3.0).decode('utf-8', errors='ignore')
-    print('Reboot')
+        msg = tn.read_until(b"#", timeout=3.0).decode('utf-8', errors='ignore')
+
+    time.sleep(180.0)
+
+    tn = telnetlib.Telnet(ip)
+    tn.read_until(b"login:")
+    tn.write(name.encode('utf-8') + b"\r\n")
+    tn.read_until(b"Password:")
+    tn.write(password.encode('utf-8') + b"\r\n")
+    tn.read_until(b"#")
+    tn.write('show version'.encode('utf-8') + b"\r\n")
+    print(tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore'))
+
+    return True
 
 def run_in_each_slot(config_file, slot):
     data = read_config_file(config_file)
@@ -123,7 +160,11 @@ def run_in_each_slot(config_file, slot):
                     name = data[slot.upper() + " User Name"]
                     if slot.upper() + " Password" in data.keys():
                         password = data[slot.upper() + " Password"]
-                        telnet_to_switch(ip, name, password, tftp, file_name)
+                        if telnet_to_switch(ip, name, password, tftp, file_name):
+                            print('Finished in {}'.format(slot))
+                            update_config(slot)
+                        else:
+                            print('ERROR!! Failed in {}'.format(slot))
                     else:
                         print(slot.upper() + ' Password is missing. Skip programming this slot.')
             else:

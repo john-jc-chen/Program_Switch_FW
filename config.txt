@@ -12,12 +12,12 @@ Firmware File Name:
 A1 User Name:
 A1 Password:
 
-A1 User Name:
-A1 Password:
+A2 User Name:
+A2 Password:
 
-A1 User Name:
-A1 Password:
+B1 User Name:
+B1 Password:
 
-A1 User Name:
-A1 Password:
+B2 User Name:
+B2 Password:
 
