@@ -167,7 +167,7 @@ def run_in_each_slot(config_file, slot):
                     Current_IP = ip
                 else:
                     continue
-                if Current_IP = '0.0.0.0':
+                if Current_IP == '0.0.0.0':
                     continue
                 print("Connecting to {} in {}".format(ip, slot))
                 if check_connectivity(ip):
