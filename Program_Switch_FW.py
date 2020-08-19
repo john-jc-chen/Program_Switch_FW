@@ -3,28 +3,31 @@ import time
 import signal
 import sys
 import logging
+import re
+import subprocess
 from telnetlib import Telnet
 
 logging.basicConfig(format='%(asctime)s : %(message)s', level=logging.INFO , filename='Running.log')
 
-
 global_lock = threading.Lock()
 
-def update_config(slot):
+def update_config(config_file, slot):
     while global_lock.locked():
         continue
 
     global_lock.acquire()
-    data = {}
-    with open("thread_writes", "r") as file:
+    data = []
+    with open(config_file, "r") as file:
         for line in file:
-            result = re.match(r'^' + slot + '\s+(\w+.*?)\:(.*?)$', line)
+            result = re.match(r'^\s?' + slot.upper() + '(\s+\w+\:).*$', line)
             if result:
-                line = slot + result.group(1) + "\n"
+                line = slot.upper() + result.group(1) + "\n"
             data.append(line)
 
-    with open("thread_writes", "w") as file:
-        file.write(data)
+    with open(config_file, "w") as file:
+        for line in data:
+            #print(line)
+            file.write(line)
     global_lock.release()
 
 def check_connectivity(ip):
@@ -66,7 +69,7 @@ def read_config_file(config_file):
 
 def telnet_to_switch(ip, name, password,tftp, file):
 
-    tn = telnetlib.Telnet(ip)
+    tn = Telnet(ip)
     tn.read_until(b"login:")
     tn.write(name.encode('utf-8') + b"\r\n")
     tn.read_until(b"Password:")
@@ -76,13 +79,15 @@ def telnet_to_switch(ip, name, password,tftp, file):
     tn.write(command.encode('utf-8') + b"\r\n")
     msg = tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore')
     Fail = True
+
     while "#" not in msg:
+        #print(msg)
         msg = tn.read_until(b"#", timeout=5.0).decode('utf-8', errors='ignore')
         if 'successfully' in msg:
             Fail = False
         if '[y/n]' in msg:
             tn.write('y'.encode('utf-8'))
-
+    #print(msg)
     if Fail:
         return False
 
@@ -98,7 +103,7 @@ def telnet_to_switch(ip, name, password,tftp, file):
             Fail = False
         if '[y/n]' in msg:
             tn.write('y'.encode('utf-8'))
-
+    #print(msg)
     if Fail:
         return False
 
@@ -110,10 +115,10 @@ def telnet_to_switch(ip, name, password,tftp, file):
             tn.write('y'.encode('utf-8'))
             break
         msg = tn.read_until(b"#", timeout=3.0).decode('utf-8', errors='ignore')
+    #print('Restarting\n')
+    time.sleep(135.0)
 
-    time.sleep(180.0)
-
-    tn = telnetlib.Telnet(ip)
+    tn = Telnet(ip)
     tn.read_until(b"login:")
     tn.write(name.encode('utf-8') + b"\r\n")
     tn.read_until(b"Password:")
@@ -137,37 +142,50 @@ def run_in_each_slot(config_file, slot):
         tftp = data["TFTP IP"]
     if "Firmware File Name":
         file_name = data["Firmware File Name"]
+    #print("{} {} {} {} {}".format(CMM_IP,CMM_name, CMM_passwd, tftp, file_name))
+    if check_connectivity(CMM_IP):
+        com = ['tool\ipmitool.exe', '-I', 'lanplus', '-H', CMM_IP, '-U', CMM_name, '-P', CMM_passwd]
+        Current_IP = 0
+        while True:
+            try:
+                output = subprocess.run(com + ['raw', '0x30', '0x33', '0x0b', '0x' + slot], stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE)
+            except Exception as e:
+                print("ERROR!! Error has occurred in read data from CMM. Skip programming {}}.\n".format(slot))
+                logging.error("ERROR!! Error has occurred in reading {} IP. ".format(slot) + str(e))
+            #print(output)
+            if output.returncode == 0:
+                ip_text_ary = output.stdout.decode("utf-8", errors='ignore').split()[1:]
+                #print(ip_text_ary)
+                ip = ''
+                for i in ip_text_ary:
+                    ip = ip + str(int(i, 16)) + '.'
+                ip = ip.rstrip(".")
+                #print('ip is {}'.format(ip))
 
-    while check_connectivity(CMM_IP):
-        com = ['ipmitool.exe', '-I', 'lanplus', '-H', ip, '-U', CMM_name, '-P', CMM_passwd]
-
-        try:
-            output = subprocess.run(com + ['raw', '0x30', '0x33', '0x0b', '0x' + slot], stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-        except Exception as e:
-            print("ERROR!! Error has occurred in read data from CMM. Skip programming {}}.\n".format(slot))
-            logging.error("ERROR!! Error has occurred in reading {} IP. ".format(slot) + str(e))
-
-        if output.returncode == 0:
-            ip_text_ary = output.stdout.decode("utf-8", errors='ignore').split()[1:]
-            for i in ip_text_ary:
-                ip = str(int(i, 16)) + '.'
-            ip = ip.rstrip(".")
-
-            if check_connectivity(ip):
-                data = read_config_file(config_file)
-                # if slot.upper() + " User Name" in data.keys():
-                #     name = data[slot.upper() + " User Name"]
-                if slot.upper() + " Password" in data.keys():
-                    password = data[slot.upper() + " Password"]
-                    if telnet_to_switch(ip, 'ADMIN', password, tftp, file_name):
-                        print('Finished in {}'.format(slot))
-                        update_config(slot)
-                    else:
-                        print('ERROR!! Failed in {}'.format(slot))
-            else:
-                print('Can NOT connect to switch in ' + slot.upper() + ' . Skip programming this slot.')
-
+                if Current_IP != ip:
+                    Current_IP = ip
+                else:
+                    continue
+                if Current_IP = '0.0.0.0':
+                    continue
+                print("Connecting to {} in {}".format(ip, slot))
+                if check_connectivity(ip):
+                    data = read_config_file(config_file)
+                    # if slot.upper() + " User Name" in data.keys():
+                    #     name = data[slot.upper() + " User Name"]
+                    if slot.upper() + " Password" in data.keys():
+                        password = data[slot.upper() + " Password"]
+                        #print('password is {}'.format(password))
+                        print("Programming FW in {}".format(slot))
+                        if telnet_to_switch(ip, 'ADMIN', password, tftp, file_name):
+                            print('Finished in {}'.format(slot))
+                            update_config(config_file, slot)
+                        else:
+                            print('ERROR!! Failed in {}'.format(slot))
+                else:
+                    print('Can NOT connect to switch in ' + slot.upper() + ' . Skip programming this slot.')
+            time.sleep(10.0)
 
 if len(sys.argv) < 2:
     print("Configuration file is missing. Exit!!\n")
@@ -182,12 +200,13 @@ def run_program():
     a2.setDaemon(True)
     b1.setDaemon(True)
     b2.setDaemon(True)
+
     a1.start()
     a2.start()
     b1.start()
     b2.start()
     while True:
-        time.sleep(1)
+        pass
 
 def exit_gracefully(signum, frame):
     # restore the original signal handler as otherwise evil things will happen
