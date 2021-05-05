@@ -3,13 +3,12 @@
 CMM IP:192.168.100.98
 CMM User Name:ADMIN
 CMM Password:ADMIN
-TFTP IP::192.168.100.1
+TFTP IP:192.168.100.1
 Firmware File Name:MBB-GEM-004-fw-1.0.0.21.img
 
 #Leave blank if there is no device at the location
-#Leave blank if you don't want to update FRU at that location
 
-A1 Password:QEIRHUWTCQ
+A1 Password:
 
 A2 Password:
 

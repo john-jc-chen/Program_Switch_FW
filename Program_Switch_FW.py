@@ -75,59 +75,59 @@ def telnet_to_switch(ip, name, password,tftp, file):
     tn.read_until(b"Password:")
     tn.write(password.encode('utf-8') + b"\r\n")
     tn.read_until(b"#")
+    time.sleep(10.0)
     command = 'firmware upgrade tftp://' + tftp + '/' + file + ' normal'
     tn.write(command.encode('utf-8') + b"\r\n")
     msg = tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore')
     Fail = True
-    logging.info("Programming FW normal on {}. ".format(ip))
-    while "#" not in msg:
-        #print(msg)
+
+    while "SMIS#" not in msg:
+        print(msg)
         msg = tn.read_until(b"#", timeout=5.0).decode('utf-8', errors='ignore')
         if 'successfully' in msg:
             Fail = False
-        if '[y/n]' in msg:
-            tn.write('y'.encode('utf-8'))
-    #print(msg)
-    if Fail:
-        return False
-    logging.info("Programming FW fallback on {}. ".format(ip))
-    #print(msg)
-    command = 'firmware upgrade tftp://' + tftp + '/' + file + ' fallback'
-    tn.write(command.encode('utf-8') + b"\r\n")
-    msg = tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore')
-    Fail = True
-    while "#" not in msg:
-        #print(msg)
-        msg = tn.read_until(b"#", timeout=5.0).decode('utf-8', errors='ignore')
-        if 'successfully' in msg:
-            Fail = False
-        if '[y/n]' in msg:
-            tn.write('y'.encode('utf-8'))
-    #print(msg)
-    if Fail:
-        return False
-    logging.info("reload on {}. ".format(ip))
-    tn.write('reload'.encode('utf-8') + b"\r\n")
-    msg = tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore')
-    while "#" not in msg:
-        #print(msg)
-        if '[y/n]' in msg:
-            tn.write('y'.encode('utf-8'))
             break
-        msg = tn.read_until(b"#", timeout=3.0).decode('utf-8', errors='ignore')
-    #print('Restarting\n')
-    #time.sleep(135.0)
-    while not check_connectivity(ip):
-        time.sleep(5.0)
-    logging.info("Re-connect to  on {}. ".format(ip))
-    tn = Telnet(ip)
-    tn.read_until(b"login:")
-    tn.write(name.encode('utf-8') + b"\r\n")
-    tn.read_until(b"Password:")
-    tn.write(password.encode('utf-8') + b"\r\n")
-    tn.read_until(b"#")
-    tn.write('show version'.encode('utf-8') + b"\r\n")
-    print(tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore'))
+        if '[y/n]' in msg:
+            tn.write('y'.encode('utf-8'))
+    #print(msg)
+    if Fail:
+        return False
+
+    #print(msg)
+    # command = 'firmware upgrade tftp://' + tftp + '/' + file + ' fallback'
+    # tn.write(command.encode('utf-8') + b"\r\n")
+    # msg = tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore')
+    # Fail = True
+    # while "#" not in msg:
+    #     #print(msg)
+    #     msg = tn.read_until(b"#", timeout=5.0).decode('utf-8', errors='ignore')
+    #     if 'successfully' in msg:
+    #         Fail = False
+    #     if '[y/n]' in msg:
+    #         tn.write('y'.encode('utf-8'))
+    # #print(msg)
+    # if Fail:
+    #     return False
+
+    # tn.write('reload'.encode('utf-8') + b"\r\n")
+    # msg = tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore')
+    # while "#" not in msg:
+    #     #print(msg)
+    #     if '[y/n]' in msg:
+    #         tn.write('y'.encode('utf-8'))
+    #         break
+    #     msg = tn.read_until(b"#", timeout=3.0).decode('utf-8', errors='ignore')
+    # #print('Restarting\n')
+    # time.sleep(135.0)
+    #
+    # tn = Telnet(ip)
+    # tn.read_until(b"login:")
+    # tn.write(name.encode('utf-8') + b"\r\n")
+    # tn.read_until(b"Password:")
+    # tn.write(password.encode('utf-8') + b"\r\n")
+    # tn.read_until(b"#")
+    # tn.write('show version'.encode('utf-8') + b"\r\n")
+    # print(tn.read_until(b"#", timeout=2.0).decode('utf-8', errors='ignore'))
 
     return True
 
@@ -176,14 +176,12 @@ def run_in_each_slot(config_file, slot):
                     data = read_config_file(config_file)
                     # if slot.upper() + " User Name" in data.keys():
                     #     name = data[slot.upper() + " User Name"]
-                    logging.info("Check connectivity to {} is ok in {}. ".format(ip, slot))
                     if slot.upper() + " Password" in data.keys():
                         password = data[slot.upper() + " Password"]
                         #print('password is {}'.format(password))
                         print("Programming FW in {}".format(slot))
                         if telnet_to_switch(ip, 'ADMIN', password, tftp, file_name):
                             print('Finished in {}'.format(slot))
-                            logging.info('Finished in {}'.format(slot))
                             update_config(config_file, slot)
                         else:
                             print('ERROR!! Failed in {}'.format(slot))
